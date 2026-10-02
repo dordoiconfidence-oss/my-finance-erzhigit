@@ -1,0 +1,1162 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Мой Баланс</title>
+
+    <!-- iOS Web App Specifics -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Мой Баланс">
+    <meta name="theme-color" content="#f2f2f7" media="(prefers-color-scheme: light)">
+    <meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
+    <link rel="apple-touch-icon" href="https://img.icons8.com/isometric/180/wallet.png">
+
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'media',
+            theme: {
+                extend: {
+                    colors: {
+                        iosBgLight: '#F2F2F7',
+                        iosCardLight: '#FFFFFF',
+                        iosBgDark: '#000000',
+                        iosCardDark: '#1C1C1E',
+                        iosPrimary: '#007AFF',
+                        iosGreen: '#34C759',
+                        iosRed: '#FF3B30',
+                        iosGray: '#8E8E93',
+                        iosBorderDark: '#2C2C2E',
+                        iosBorderLight: '#E5E5EA'
+                    },
+                    fontFamily: {
+                        sans: ['-apple-system', 'BlinkMacSystemFont', '"SF Pro Display"', '"SF Pro Text"', 'Helvetica Neue', 'Arial', 'sans-serif']
+                    }
+                }
+            }
+        }
+    </script>
+
+    <!-- Chart.js for Interactive Charts -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <style>
+        /* iOS Safe Area handling */
+        body {
+            padding-top: env(safe-area-inset-top);
+            padding-bottom: env(safe-area-inset-bottom);
+            -webkit-tap-highlight-color: transparent;
+            touch-action: manipulation;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        .pb-safe-bottom {
+            padding-bottom: calc(4.5rem + env(safe-area-inset-bottom));
+        }
+
+        .pt-safe-top {
+            padding-top: max(1rem, env(safe-area-inset-top));
+        }
+
+        /* Custom iOS Style Scrollbars */
+        ::-webkit-scrollbar {
+            width: 0px;
+            background: transparent;
+        }
+
+        /* Glassmorphic Effects */
+        .glass-header {
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+        }
+
+        @media (prefers-color-scheme: dark) {
+            .glass-header {
+                background: rgba(28, 28, 30, 0.85);
+            }
+        }
+
+        /* Smooth tab switcher */
+        .tab-content {
+            display: none;
+            opacity: 0;
+            transition: opacity 0.2s ease-in-out;
+        }
+
+        .tab-content.active {
+            display: block;
+            opacity: 1;
+        }
+    </style>
+</head>
+<body class="bg-iosBgLight dark:bg-iosBgDark text-gray-900 dark:text-gray-100 min-h-screen font-sans antialiased selection:bg-blue-500 selection:text-white">
+
+    <!-- Top Header -->
+    <header class="sticky top-0 z-30 glass-header border-b border-iosBorderLight dark:border-iosBorderDark px-4 py-3 flex justify-between items-center transition-colors">
+        <div>
+            <span id="header-subtitle" class="text-xs uppercase font-semibold text-iosGray tracking-wider block">Учёт Финансов</span>
+            <h1 id="header-title" class="text-xl font-bold tracking-tight">Обзор</h1>
+        </div>
+        <div class="flex items-center gap-2">
+            <button onclick="openModal('transaction-modal')" class="bg-iosPrimary text-white p-2.5 rounded-full shadow-md active:scale-95 transition-transform flex items-center justify-center">
+                <i data-lucide="plus" class="w-5 h-5"></i>
+            </button>
+        </div>
+    </header>
+
+    <!-- Main Content Container -->
+    <main class="max-w-lg mx-auto px-4 pt-4 pb-safe-bottom">
+
+        <!-- TAB 1: DASHBOARD -->
+        <section id="tab-dashboard" class="tab-content active space-y-5">
+            <!-- Balance Card -->
+            <div class="bg-gradient-to-br from-blue-600 to-indigo-700 text-white p-6 rounded-3xl shadow-lg relative overflow-hidden">
+                <div class="absolute -right-6 -bottom-6 w-32 h-32 bg-white/10 rounded-full blur-xl pointer-events-none"></div>
+                <div class="flex justify-between items-start mb-2">
+                    <span class="text-xs font-medium uppercase tracking-wider text-blue-100">Текущий общий баланс</span>
+                    <i data-lucide="wallet" class="w-6 h-6 text-blue-200"></i>
+                </div>
+                <div id="dashboard-total-balance" class="text-3xl sm:text-4xl font-extrabold tracking-tight mb-4">
+                    0 ₽
+                </div>
+                
+                <!-- Month Filter Indicator -->
+                <div class="flex items-center justify-between text-xs text-blue-100 pt-3 border-t border-white/20">
+                    <span id="dashboard-month-label" class="font-medium">За текущий месяц</span>
+                    <select id="dashboard-month-select" onchange="changeDashboardMonth(this.value)" class="bg-white/20 text-white rounded-lg px-2 py-1 outline-none text-xs font-semibold cursor-pointer">
+                        <!-- Options generated dynamically -->
+                    </select>
+                </div>
+            </div>
+
+            <!-- Income vs Expense Summary Cards -->
+            <div class="grid grid-cols-2 gap-3">
+                <!-- Income -->
+                <div class="bg-iosCardLight dark:bg-iosCardDark p-4 rounded-2xl shadow-sm border border-iosBorderLight dark:border-iosBorderDark flex flex-col justify-between">
+                    <div class="flex items-center gap-2 mb-2">
+                        <div class="p-1.5 bg-green-500/10 text-iosGreen rounded-lg">
+                            <i data-lucide="arrow-down-left" class="w-4 h-4"></i>
+                        </div>
+                        <span class="text-xs font-medium text-iosGray">Доходы</span>
+                    </div>
+                    <div id="dashboard-month-income" class="text-lg font-bold text-iosGreen">
+                        0 ₽
+                    </div>
+                </div>
+
+                <!-- Expense -->
+                <div class="bg-iosCardLight dark:bg-iosCardDark p-4 rounded-2xl shadow-sm border border-iosBorderLight dark:border-iosBorderDark flex flex-col justify-between">
+                    <div class="flex items-center gap-2 mb-2">
+                        <div class="p-1.5 bg-red-500/10 text-iosRed rounded-lg">
+                            <i data-lucide="arrow-up-right" class="w-4 h-4"></i>
+                        </div>
+                        <span class="text-xs font-medium text-iosGray">Расходы</span>
+                    </div>
+                    <div id="dashboard-month-expense" class="text-lg font-bold text-iosRed">
+                        0 ₽
+                    </div>
+                </div>
+            </div>
+
+            <!-- Quick Action Buttons -->
+            <div class="grid grid-cols-2 gap-3">
+                <button onclick="openModalWithDetails('income')" class="bg-iosGreen active:bg-green-600 text-white py-3.5 px-4 rounded-2xl font-semibold shadow-md flex items-center justify-center gap-2 active:scale-98 transition-all">
+                    <i data-lucide="plus-circle" class="w-5 h-5"></i>
+                    <span>+ Доход</span>
+                </button>
+                <button onclick="openModalWithDetails('expense')" class="bg-iosRed active:bg-red-600 text-white py-3.5 px-4 rounded-2xl font-semibold shadow-md flex items-center justify-center gap-2 active:scale-98 transition-all">
+                    <i data-lucide="minus-circle" class="w-5 h-5"></i>
+                    <span>− Расход</span>
+                </button>
+            </div>
+
+            <!-- Recent Transactions Widget -->
+            <div class="space-y-3">
+                <div class="flex justify-between items-center px-1">
+                    <h3 class="font-bold text-base">Последние операции</h3>
+                    <button onclick="switchTab('history')" class="text-xs font-semibold text-iosPrimary flex items-center gap-0.5">
+                        Все <i data-lucide="chevron-right" class="w-3.5 h-3.5"></i>
+                    </button>
+                </div>
+                <div id="dashboard-recent-list" class="space-y-2">
+                    <!-- Recent items injected here -->
+                </div>
+            </div>
+        </section>
+
+        <!-- TAB 2: HISTORY -->
+        <section id="tab-history" class="tab-content space-y-4">
+            <!-- Search and Filter Bar -->
+            <div class="space-y-2 bg-iosCardLight dark:bg-iosCardDark p-3 rounded-2xl border border-iosBorderLight dark:border-iosBorderDark shadow-sm">
+                <!-- Search -->
+                <div class="relative">
+                    <i data-lucide="search" class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-iosGray"></i>
+                    <input type="text" id="history-search" oninput="renderHistory()" placeholder="Поиск по комментариям или категориям..." class="w-full bg-iosBgLight dark:bg-iosBgDark text-sm rounded-xl pl-9 pr-3 py-2 outline-none border border-transparent focus:border-iosPrimary">
+                </div>
+                
+                <!-- Filters Row -->
+                <div class="grid grid-cols-3 gap-2">
+                    <select id="history-filter-month" onchange="renderHistory()" class="bg-iosBgLight dark:bg-iosBgDark text-xs font-medium rounded-xl p-2 border-0 outline-none text-gray-700 dark:text-gray-200">
+                        <!-- Options generated dynamically -->
+                    </select>
+
+                    <select id="history-filter-type" onchange="renderHistory()" class="bg-iosBgLight dark:bg-iosBgDark text-xs font-medium rounded-xl p-2 border-0 outline-none text-gray-700 dark:text-gray-200">
+                        <option value="all">Все типы</option>
+                        <option value="income">Доходы</option>
+                        <option value="expense">Расходы</option>
+                    </select>
+
+                    <select id="history-filter-category" onchange="renderHistory()" class="bg-iosBgLight dark:bg-iosBgDark text-xs font-medium rounded-xl p-2 border-0 outline-none text-gray-700 dark:text-gray-200 truncate">
+                        <option value="all">Все категории</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Grouped History List -->
+            <div id="history-list-container" class="space-y-4">
+                <!-- History elements injected here -->
+            </div>
+        </section>
+
+        <!-- TAB 3: STATISTICS -->
+        <section id="tab-stats" class="tab-content space-y-5">
+            <!-- Month Picker for Stats -->
+            <div class="flex justify-between items-center bg-iosCardLight dark:bg-iosCardDark p-3 rounded-2xl border border-iosBorderLight dark:border-iosBorderDark shadow-sm">
+                <span class="text-sm font-semibold">Период статистики:</span>
+                <select id="stats-month-select" onchange="renderStats()" class="bg-iosBgLight dark:bg-iosBgDark text-sm font-medium rounded-xl px-3 py-1.5 border-0 outline-none">
+                    <!-- Options generated dynamically -->
+                </select>
+            </div>
+
+            <!-- Fabric vs Salary Income Breakdown Card -->
+            <div class="bg-iosCardLight dark:bg-iosCardDark p-4 rounded-2xl border border-iosBorderLight dark:border-iosBorderDark shadow-sm space-y-3">
+                <div class="flex items-center justify-between">
+                    <h3 class="font-bold text-sm flex items-center gap-2">
+                        <i data-lucide="scissors" class="w-4 h-4 text-iosPrimary"></i>
+                        Анализ Доходов (ЗП vs Ткани)
+                    </h3>
+                    <span id="stats-income-total" class="text-xs font-bold text-iosGreen">0 ₽</span>
+                </div>
+                
+                <!-- Fabric Bar -->
+                <div class="space-y-1">
+                    <div class="flex justify-between text-xs">
+                        <span class="font-medium">Отправка тканей</span>
+                        <span id="stats-fabric-val" class="text-iosGray">0 ₽ (0%)</span>
+                    </div>
+                    <div class="w-full bg-iosBgLight dark:bg-iosBgDark h-2.5 rounded-full overflow-hidden">
+                        <div id="stats-fabric-bar" class="bg-indigo-500 h-full rounded-full transition-all duration-500" style="width: 0%"></div>
+                    </div>
+                </div>
+
+                <!-- Salary Bar -->
+                <div class="space-y-1">
+                    <div class="flex justify-between text-xs">
+                        <span class="font-medium">Зарплата</span>
+                        <span id="stats-salary-val" class="text-iosGray">0 ₽ (0%)</span>
+                    </div>
+                    <div class="w-full bg-iosBgLight dark:bg-iosBgDark h-2.5 rounded-full overflow-hidden">
+                        <div id="stats-salary-bar" class="bg-green-500 h-full rounded-full transition-all duration-500" style="width: 0%"></div>
+                    </div>
+                </div>
+
+                <!-- Other Income Bar -->
+                <div class="space-y-1">
+                    <div class="flex justify-between text-xs">
+                        <span class="font-medium">Прочие доходы</span>
+                        <span id="stats-other-income-val" class="text-iosGray">0 ₽ (0%)</span>
+                    </div>
+                    <div class="w-full bg-iosBgLight dark:bg-iosBgDark h-2.5 rounded-full overflow-hidden">
+                        <div id="stats-other-income-bar" class="bg-teal-400 h-full rounded-full transition-all duration-500" style="width: 0%"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Expense Category Donut Chart -->
+            <div class="bg-iosCardLight dark:bg-iosCardDark p-4 rounded-2xl border border-iosBorderLight dark:border-iosBorderDark shadow-sm space-y-3">
+                <h3 class="font-bold text-sm flex items-center gap-2">
+                    <i data-lucide="pie-chart" class="w-4 h-4 text-iosRed"></i>
+                    Структура Расходов
+                </h3>
+                <div class="relative w-full max-w-[220px] mx-auto h-[220px]">
+                    <canvas id="expenses-chart"></canvas>
+                </div>
+                <div id="expenses-legend" class="space-y-2 pt-2 border-t border-iosBorderLight dark:border-iosBorderDark">
+                    <!-- Dynamic legend list -->
+                </div>
+            </div>
+
+            <!-- Month Comparison Widget -->
+            <div class="bg-iosCardLight dark:bg-iosCardDark p-4 rounded-2xl border border-iosBorderLight dark:border-iosBorderDark shadow-sm space-y-3">
+                <h3 class="font-bold text-sm flex items-center gap-2">
+                    <i data-lucide="trending-up" class="w-4 h-4 text-iosPrimary"></i>
+                    Динамика по месяцам
+                </h3>
+                <div class="h-44 w-full">
+                    <canvas id="monthly-comparison-chart"></canvas>
+                </div>
+            </div>
+        </section>
+
+        <!-- TAB 4: SETTINGS -->
+        <section id="tab-settings" class="tab-content space-y-5">
+            <!-- Manage Categories Section -->
+            <div class="bg-iosCardLight dark:bg-iosCardDark p-4 rounded-2xl border border-iosBorderLight dark:border-iosBorderDark shadow-sm space-y-4">
+                <h3 class="font-bold text-sm flex items-center gap-2">
+                    <i data-lucide="tags" class="w-4 h-4 text-iosPrimary"></i>
+                    Управление Категориями
+                </h3>
+                
+                <!-- Category Selector -->
+                <div class="flex gap-2">
+                    <button id="cat-type-btn-expense" onclick="toggleCategoryManageType('expense')" class="flex-1 py-1.5 text-xs font-semibold rounded-lg bg-iosPrimary text-white">Расходы</button>
+                    <button id="cat-type-btn-income" onclick="toggleCategoryManageType('income')" class="flex-1 py-1.5 text-xs font-semibold rounded-lg bg-iosBgLight dark:bg-iosBgDark text-iosGray">Доходы</button>
+                </div>
+
+                <!-- Add New Category -->
+                <div class="flex gap-2">
+                    <input type="text" id="new-category-name" placeholder="Новая категория..." class="flex-1 bg-iosBgLight dark:bg-iosBgDark text-xs rounded-xl px-3 py-2 border border-transparent outline-none focus:border-iosPrimary">
+                    <button onclick="addNewCategory()" class="bg-iosPrimary text-white text-xs px-4 py-2 rounded-xl font-medium active:scale-95 transition-transform">
+                        Добавить
+                    </button>
+                </div>
+
+                <!-- Categories List -->
+                <div id="settings-categories-list" class="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+                    <!-- Categories listed here dynamically -->
+                </div>
+            </div>
+
+            <!-- Backup and Restore Section -->
+            <div class="bg-iosCardLight dark:bg-iosCardDark p-4 rounded-2xl border border-iosBorderLight dark:border-iosBorderDark shadow-sm space-y-3">
+                <h3 class="font-bold text-sm flex items-center gap-2">
+                    <i data-lucide="database" class="w-4 h-4 text-iosPrimary"></i>
+                    Резервное копирование и Экспорт
+                </h3>
+                <p class="text-xs text-iosGray">Сохраняйте данные локально или переносите их на другое устройство.</p>
+                
+                <div class="grid grid-cols-2 gap-2 pt-1">
+                    <button onclick="exportDataJSON()" class="bg-iosBgLight dark:bg-iosBgDark hover:bg-gray-200 dark:hover:bg-gray-800 text-xs font-semibold py-2.5 px-3 rounded-xl border border-iosBorderLight dark:border-iosBorderDark flex items-center justify-center gap-1.5">
+                        <i data-lucide="download" class="w-3.5 h-3.5 text-iosPrimary"></i>
+                        <span>Экспорт JSON</span>
+                    </button>
+                    <button onclick="exportDataCSV()" class="bg-iosBgLight dark:bg-iosBgDark hover:bg-gray-200 dark:hover:bg-gray-800 text-xs font-semibold py-2.5 px-3 rounded-xl border border-iosBorderLight dark:border-iosBorderDark flex items-center justify-center gap-1.5">
+                        <i data-lucide="file-text" class="w-3.5 h-3.5 text-iosGreen"></i>
+                        <span>Экспорт CSV</span>
+                    </button>
+                </div>
+
+                <div class="pt-2">
+                    <label class="w-full bg-iosPrimary/10 text-iosPrimary hover:bg-iosPrimary/20 text-xs font-semibold py-2.5 px-3 rounded-xl border border-iosPrimary/20 flex items-center justify-center gap-1.5 cursor-pointer">
+                        <i data-lucide="upload" class="w-3.5 h-3.5"></i>
+                        <span>Импортировать из JSON</span>
+                        <input type="file" id="import-file" accept=".json" onchange="importDataJSON(event)" class="hidden">
+                    </label>
+                </div>
+            </div>
+
+            <!-- Danger Zone -->
+            <div class="bg-iosCardLight dark:bg-iosCardDark p-4 rounded-2xl border border-iosBorderLight dark:border-iosBorderDark shadow-sm space-y-3">
+                <h3 class="font-bold text-sm text-iosRed flex items-center gap-2">
+                    <i data-lucide="alert-triangle" class="w-4 h-4"></i>
+                    Опасное действие
+                </h3>
+                <p class="text-xs text-iosGray">Удалить все имеющиеся данные и загрузить демонстрационные категории и записи заново.</p>
+                <button onclick="confirmResetData()" class="w-full bg-iosRed/10 text-iosRed hover:bg-iosRed/20 text-xs font-semibold py-2.5 px-3 rounded-xl border border-iosRed/20 transition-colors">
+                    Сбросить данные к демо-режиму
+                </button>
+            </div>
+        </section>
+    </main>
+
+    <!-- Bottom Tab Navigation Bar -->
+    <nav class="fixed bottom-0 left-0 right-0 z-30 glass-header border-t border-iosBorderLight dark:border-iosBorderDark px-6 py-2 flex justify-around items-center">
+        <button onclick="switchTab('dashboard')" id="nav-dashboard" class="flex flex-col items-center gap-1 text-iosPrimary transition-colors">
+            <i data-lucide="layout-dashboard" class="w-5 h-5"></i>
+            <span class="text-[10px] font-medium">Главная</span>
+        </button>
+        <button onclick="switchTab('history')" id="nav-history" class="flex flex-col items-center gap-1 text-iosGray transition-colors">
+            <i data-lucide="list-ordered" class="w-5 h-5"></i>
+            <span class="text-[10px] font-medium">История</span>
+        </button>
+        <button onclick="switchTab('stats')" id="nav-stats" class="flex flex-col items-center gap-1 text-iosGray transition-colors">
+            <i data-lucide="pie-chart" class="w-5 h-5"></i>
+            <span class="text-[10px] font-medium">Статистика</span>
+        </button>
+        <button onclick="switchTab('settings')" id="nav-settings" class="flex flex-col items-center gap-1 text-iosGray transition-colors">
+            <i data-lucide="settings" class="w-5 h-5"></i>
+            <span class="text-[10px] font-medium">Настройки</span>
+        </button>
+    </nav>
+
+    <!-- Modal Form: Add / Edit Transaction -->
+    <div id="transaction-modal" class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm hidden flex items-end sm:items-center justify-center p-0 sm:p-4 transition-opacity">
+        <div class="bg-iosCardLight dark:bg-iosCardDark w-full max-w-md rounded-t-3xl sm:rounded-3xl p-5 shadow-2xl border border-iosBorderLight dark:border-iosBorderDark space-y-4 max-h-[90vh] overflow-y-auto animate-slide-up">
+            
+            <div class="flex justify-between items-center border-b border-iosBorderLight dark:border-iosBorderDark pb-3">
+                <h3 id="modal-title" class="font-bold text-lg">Новая запись</h3>
+                <button onclick="closeModal('transaction-modal')" class="p-1 rounded-full bg-iosBgLight dark:bg-iosBgDark text-iosGray">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+
+            <form id="transaction-form" onsubmit="handleSaveTransaction(event)" class="space-y-4">
+                <input type="hidden" id="tx-id">
+
+                <!-- Type Segment Control -->
+                <div class="grid grid-cols-2 gap-2 bg-iosBgLight dark:bg-iosBgDark p-1 rounded-xl">
+                    <button type="button" id="tx-type-expense" onclick="setTxType('expense')" class="py-2 text-xs font-semibold rounded-lg bg-iosRed text-white shadow-sm transition-all">Расход</button>
+                    <button type="button" id="tx-type-income" onclick="setTxType('income')" class="py-2 text-xs font-semibold rounded-lg text-iosGray transition-all">Доход</button>
+                </div>
+
+                <!-- Amount Field -->
+                <div>
+                    <label class="text-xs font-semibold text-iosGray block mb-1">Сумма (₽)</label>
+                    <div class="relative">
+                        <input type="number" step="any" id="tx-amount" required placeholder="0" class="w-full bg-iosBgLight dark:bg-iosBgDark text-2xl font-bold rounded-2xl px-4 py-3 outline-none border border-transparent focus:border-iosPrimary">
+                        <span class="absolute right-4 top-1/2 -translate-y-1/2 text-xl font-bold text-iosGray">₽</span>
+                    </div>
+                </div>
+
+                <!-- Category Field -->
+                <div>
+                    <label class="text-xs font-semibold text-iosGray block mb-1">Категория</label>
+                    <select id="tx-category" required class="w-full bg-iosBgLight dark:bg-iosBgDark text-sm font-medium rounded-xl p-3 outline-none border border-transparent focus:border-iosPrimary">
+                        <!-- Filled dynamically based on type -->
+                    </select>
+                </div>
+
+                <!-- Date Field -->
+                <div>
+                    <label class="text-xs font-semibold text-iosGray block mb-1">Дата</label>
+                    <input type="date" id="tx-date" required class="w-full bg-iosBgLight dark:bg-iosBgDark text-sm font-medium rounded-xl p-3 outline-none border border-transparent focus:border-iosPrimary">
+                </div>
+
+                <!-- Comment Field -->
+                <div>
+                    <label class="text-xs font-semibold text-iosGray block mb-1">Комментарий (необязательно)</label>
+                    <input type="text" id="tx-comment" placeholder="Например: отправка 50 м ткани, Иванов" class="w-full bg-iosBgLight dark:bg-iosBgDark text-sm font-medium rounded-xl p-3 outline-none border border-transparent focus:border-iosPrimary">
+                </div>
+
+                <!-- Submit Button -->
+                <div class="pt-2 flex gap-2">
+                    <button type="button" id="tx-delete-btn" onclick="handleDeleteTransaction()" class="hidden bg-iosRed/10 text-iosRed py-3 px-4 rounded-xl font-semibold text-sm hover:bg-iosRed/20">
+                        Удалить
+                    </button>
+                    <button type="submit" class="flex-1 bg-iosPrimary text-white py-3 px-4 rounded-xl font-semibold text-sm active:scale-98 transition-transform shadow-md">
+                        Сохранить
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Notification Toast Modal -->
+    <div id="toast" class="fixed top-5 left-1/2 -translate-x-1/2 z-50 bg-gray-900/90 text-white text-xs font-medium px-4 py-2.5 rounded-full shadow-lg backdrop-blur-md opacity-0 pointer-events-none transition-opacity duration-300">
+        Уведомление
+    </div>
+
+    <script>
+        /* ==================== APP STATE & DEFAULTS ==================== */
+        const STORAGE_KEY_TX = 'ios_finance_transactions_v1';
+        const STORAGE_KEY_CAT = 'ios_finance_categories_v1';
+
+        const DEFAULT_CATEGORIES = {
+            income: ['Зарплата', 'Отправка тканей', 'Прочее'],
+            expense: ['Продукты', 'Транспорт', 'Связь', 'Коммуналка', 'Ткани / Закупка', 'Прочее']
+        };
+
+        const DEMO_TRANSACTIONS = [
+            { id: '1', type: 'income', amount: 120000, category: 'Зарплата', date: getFormattedDate(0), comment: 'Аванс за текущий месяц' },
+            { id: '2', type: 'income', amount: 45000, category: 'Отправка тканей', date: getFormattedDate(-2), comment: 'отправка 60 м ткани, клиент Ибрагим' },
+            { id: '3', type: 'expense', amount: 4200, category: 'Продукты', date: getFormattedDate(-1), comment: 'Закупка продуктов в гипермаркете' },
+            { id: '4', type: 'expense', amount: 18000, category: 'Ткани / Закупка', date: getFormattedDate(-3), comment: 'Закупка рулонов шелка' },
+            { id: '5', type: 'expense', amount: 2500, category: 'Коммуналка', date: getFormattedDate(-5), comment: 'Оплата за свет и воду' },
+            { id: '6', type: 'expense', amount: 600, category: 'Связь', date: getFormattedDate(-6), comment: 'Тариф за телефон' },
+            { id: '7', type: 'income', amount: 32000, category: 'Отправка тканей', date: getFormattedDate(-10), comment: 'отправка 40 м льна, ООО Текстиль' }
+        ];
+
+        let transactions = [];
+        let categories = {};
+        let currentModalTxType = 'expense';
+        let currentManageCategoryType = 'expense';
+        let expensesChartInstance = null;
+        let monthlyChartInstance = null;
+        let selectedDashboardMonth = getCurrentMonthKey();
+
+        /* Helper to get ISO Date string with offset */
+        function getFormattedDate(offsetDays = 0) {
+            const d = new Date();
+            d.setDate(d.getDate() + offsetDays);
+            return d.toISOString().split('T')[0];
+        }
+
+        function getCurrentMonthKey() {
+            const d = new Date();
+            return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+        }
+
+        /* ==================== INITIALIZATION ==================== */
+        window.addEventListener('DOMContentLoaded', () => {
+            loadData();
+            setupServiceWorker();
+            lucide.createIcons();
+            populateMonthDropdowns();
+            renderDashboard();
+            renderHistory();
+            renderStats();
+            renderSettingsCategories();
+        });
+
+        function loadData() {
+            const savedCategories = localStorage.getItem(STORAGE_KEY_CAT);
+            categories = savedCategories ? JSON.parse(savedCategories) : JSON.parse(JSON.stringify(DEFAULT_CATEGORIES));
+
+            const savedTx = localStorage.getItem(STORAGE_KEY_TX);
+            transactions = savedTx ? JSON.parse(savedTx) : DEMO_TRANSACTIONS;
+
+            saveData();
+        }
+
+        function saveData() {
+            localStorage.setItem(STORAGE_KEY_CAT, JSON.stringify(categories));
+            localStorage.setItem(STORAGE_KEY_TX, JSON.stringify(transactions));
+        }
+
+        /* ==================== NAVIGATION ==================== */
+        function switchTab(tabId) {
+            document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
+            document.getElementById(`tab-${tabId}`).classList.add('active');
+
+            // Reset navigation tab button icons
+            const tabs = ['dashboard', 'history', 'stats', 'settings'];
+            const titles = {
+                dashboard: 'Обзор',
+                history: 'История операций',
+                stats: 'Аналитика',
+                settings: 'Настройки'
+            };
+
+            tabs.forEach(t => {
+                const navBtn = document.getElementById(`nav-${t}`);
+                if (t === tabId) {
+                    navBtn.className = 'flex flex-col items-center gap-1 text-iosPrimary transition-colors';
+                } else {
+                    navBtn.className = 'flex flex-col items-center gap-1 text-iosGray transition-colors';
+                }
+            });
+
+            document.getElementById('header-title').innerText = titles[tabId];
+
+            if (tabId === 'stats') {
+                renderStats();
+            } else if (tabId === 'history') {
+                renderHistory();
+            } else if (tabId === 'dashboard') {
+                renderDashboard();
+            }
+        }
+
+        function populateMonthDropdowns() {
+            const months = getAvailableMonths();
+            const dashSelect = document.getElementById('dashboard-month-select');
+            const historySelect = document.getElementById('history-filter-month');
+            const statsSelect = document.getElementById('stats-month-select');
+
+            let optionsHtml = '';
+            months.forEach(m => {
+                optionsHtml += `<option value="${m.key}">${m.label}</option>`;
+            });
+
+            dashSelect.innerHTML = optionsHtml;
+            historySelect.innerHTML = `<option value="all">Все месяцы</option>` + optionsHtml;
+            statsSelect.innerHTML = optionsHtml;
+
+            dashSelect.value = selectedDashboardMonth;
+            statsSelect.value = selectedDashboardMonth;
+        }
+
+        function getAvailableMonths() {
+            const keys = new Set();
+            keys.add(getCurrentMonthKey());
+            transactions.forEach(t => {
+                if (t.date) {
+                    keys.add(t.date.substring(0, 7));
+                }
+            });
+
+            const sorted = Array.from(keys).sort().reverse();
+            return sorted.map(key => {
+                const [year, month] = key.split('-');
+                const dateObj = new Date(year, parseInt(month) - 1, 1);
+                const monthName = dateObj.toLocaleString('ru-RU', { month: 'long', year: 'numeric' });
+                return {
+                    key: key,
+                    label: monthName.charAt(0).toUpperCase() + monthName.slice(1)
+                };
+            });
+        }
+
+        /* ==================== DASHBOARD LOGIC ==================== */
+        function changeDashboardMonth(val) {
+            selectedDashboardMonth = val;
+            renderDashboard();
+        }
+
+        function renderDashboard() {
+            // Calculate Total Overall Balance
+            const totalBalance = transactions.reduce((acc, t) => {
+                return t.type === 'income' ? acc + Number(t.amount) : acc - Number(t.amount);
+            }, 0);
+
+            document.getElementById('dashboard-total-balance').innerText = formatMoney(totalBalance);
+
+            // Calculate Monthly Stats
+            const monthTx = transactions.filter(t => t.date && t.date.startsWith(selectedDashboardMonth));
+            const monthIncome = monthTx.filter(t => t.type === 'income').reduce((acc, t) => acc + Number(t.amount), 0);
+            const monthExpense = monthTx.filter(t => t.type === 'expense').reduce((acc, t) => acc + Number(t.amount), 0);
+
+            document.getElementById('dashboard-month-income').innerText = formatMoney(monthIncome);
+            document.getElementById('dashboard-month-expense').innerText = formatMoney(monthExpense);
+
+            // Render Recent 5 Transactions
+            const recentTx = [...transactions].sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 5);
+            const recentListEl = document.getElementById('dashboard-recent-list');
+
+            if (recentTx.length === 0) {
+                recentListEl.innerHTML = `<div class="text-center py-6 text-xs text-iosGray">Записей пока нет</div>`;
+                return;
+            }
+
+            recentListEl.innerHTML = recentTx.map(t => createTransactionItemHtml(t)).join('');
+            lucide.createIcons();
+        }
+
+        /* ==================== HISTORY LOGIC ==================== */
+        function renderHistory() {
+            const searchVal = document.getElementById('history-search').value.toLowerCase();
+            const monthVal = document.getElementById('history-filter-month').value;
+            const typeVal = document.getElementById('history-filter-type').value;
+            const catVal = document.getElementById('history-filter-category').value;
+
+            // Populate category filter options dynamically
+            const catFilterEl = document.getElementById('history-filter-category');
+            const allCats = [...categories.income, ...categories.expense];
+            const currentSelected = catFilterEl.value;
+            catFilterEl.innerHTML = `<option value="all">Все категории</option>` + 
+                allCats.map(c => `<option value="${c}" ${c === currentSelected ? 'selected' : ''}>${c}</option>`).join('');
+
+            let filtered = transactions.filter(t => {
+                const matchesSearch = (t.comment && t.comment.toLowerCase().includes(searchVal)) ||
+                                      (t.category && t.category.toLowerCase().includes(searchVal));
+                const matchesMonth = monthVal === 'all' || (t.date && t.date.startsWith(monthVal));
+                const matchesType = typeVal === 'all' || t.type === typeVal;
+                const matchesCategory = catVal === 'all' || t.category === catVal;
+
+                return matchesSearch && matchesMonth && matchesType && matchesCategory;
+            });
+
+            // Sort by Date descending
+            filtered.sort((a, b) => new Date(b.date) - new Date(a.date));
+
+            const container = document.getElementById('history-list-container');
+            if (filtered.length === 0) {
+                container.innerHTML = `<div class="text-center py-10 text-xs text-iosGray">Ничего не найдено</div>`;
+                return;
+            }
+
+            // Group by Date
+            const grouped = {};
+            filtered.forEach(t => {
+                if (!grouped[t.date]) grouped[t.date] = [];
+                grouped[t.date].push(t);
+            });
+
+            let html = '';
+            for (const date in grouped) {
+                const formattedDateStr = formatDateHeading(date);
+                html += `
+                    <div class="space-y-2">
+                        <div class="text-xs font-semibold text-iosGray px-1 uppercase tracking-wider">${formattedDateStr}</div>
+                        <div class="space-y-1.5">
+                            ${grouped[date].map(t => createTransactionItemHtml(t)).join('')}
+                        </div>
+                    </div>
+                `;
+            }
+
+            container.innerHTML = html;
+            lucide.createIcons();
+        }
+
+        /* ==================== STATISTICS LOGIC ==================== */
+        function renderStats() {
+            const selectedMonth = document.getElementById('stats-month-select').value;
+            const monthTx = transactions.filter(t => t.date && t.date.startsWith(selectedMonth));
+
+            // Income Breakdown (Fabric vs Salary)
+            const incomeTx = monthTx.filter(t => t.type === 'income');
+            const totalIncome = incomeTx.reduce((acc, t) => acc + Number(t.amount), 0);
+
+            const fabricIncome = incomeTx.filter(t => t.category === 'Отправка тканей').reduce((acc, t) => acc + Number(t.amount), 0);
+            const salaryIncome = incomeTx.filter(t => t.category === 'Зарплата').reduce((acc, t) => acc + Number(t.amount), 0);
+            const otherIncome = totalIncome - (fabricIncome + salaryIncome);
+
+            const fabricPct = totalIncome > 0 ? Math.round((fabricIncome / totalIncome) * 100) : 0;
+            const salaryPct = totalIncome > 0 ? Math.round((salaryIncome / totalIncome) * 100) : 0;
+            const otherPct = totalIncome > 0 ? Math.round((otherIncome / totalIncome) * 100) : 0;
+
+            document.getElementById('stats-income-total').innerText = formatMoney(totalIncome);
+            document.getElementById('stats-fabric-val').innerText = `${formatMoney(fabricIncome)} (${fabricPct}%)`;
+            document.getElementById('stats-fabric-bar').style.width = `${fabricPct}%`;
+
+            document.getElementById('stats-salary-val').innerText = `${formatMoney(salaryIncome)} (${salaryPct}%)`;
+            document.getElementById('stats-salary-bar').style.width = `${salaryPct}%`;
+
+            document.getElementById('stats-other-income-val').innerText = `${formatMoney(otherIncome)} (${otherPct}%)`;
+            document.getElementById('stats-other-income-bar').style.width = `${otherPct}%`;
+
+            // Expenses Pie/Donut Chart
+            const expenseTx = monthTx.filter(t => t.type === 'expense');
+            const expByCat = {};
+            expenseTx.forEach(t => {
+                expByCat[t.category] = (expByCat[t.category] || 0) + Number(t.amount);
+            });
+
+            const expLabels = Object.keys(expByCat);
+            const expData = Object.values(expByCat);
+            const totalExpense = expData.reduce((a, b) => a + b, 0);
+
+            const chartColors = ['#FF3B30', '#FF9500', '#FFCC00', '#AF52DE', '#5856D6', '#007AFF', '#34C759', '#8E8E93'];
+
+            // Render Expense Donut Chart
+            const ctxDonut = document.getElementById('expenses-chart').getContext('2d');
+            if (expensesChartInstance) expensesChartInstance.destroy();
+
+            if (expData.length === 0) {
+                expensesChartInstance = new Chart(ctxDonut, {
+                    type: 'doughnut',
+                    data: {
+                        labels: ['Нет расходов'],
+                        datasets: [{ data: [1], backgroundColor: ['#E5E5EA'] }]
+                    },
+                    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
+                });
+            } else {
+                expensesChartInstance = new Chart(ctxDonut, {
+                    type: 'doughnut',
+                    data: {
+                        labels: expLabels,
+                        datasets: [{
+                            data: expData,
+                            backgroundColor: chartColors.slice(0, expLabels.length),
+                            borderWidth: 0
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { legend: { display: false } },
+                        cutout: '70%'
+                    }
+                });
+            }
+
+            // Expense Legend
+            const legendContainer = document.getElementById('expenses-legend');
+            if (expData.length === 0) {
+                legendContainer.innerHTML = `<div class="text-xs text-iosGray text-center py-2">За выбранный месяц нет расходов</div>`;
+            } else {
+                legendContainer.innerHTML = expLabels.map((cat, idx) => {
+                    const amt = expByCat[cat];
+                    const pct = Math.round((amt / totalExpense) * 100);
+                    return `
+                        <div class="flex items-center justify-between text-xs">
+                            <div class="flex items-center gap-2">
+                                <span class="w-3 h-3 rounded-full inline-block" style="background-color: ${chartColors[idx % chartColors.length]}"></span>
+                                <span class="font-medium">${cat}</span>
+                            </div>
+                            <span class="text-iosGray font-semibold">${formatMoney(amt)} (${pct}%)</span>
+                        </div>
+                    `;
+                }).join('');
+            }
+
+            // Monthly Comparison Chart (Last 6 Months)
+            renderMonthlyComparisonChart();
+        }
+
+        function renderMonthlyComparisonChart() {
+            const availableMonths = getAvailableMonths().slice(0, 6).reverse();
+            const labels = availableMonths.map(m => m.label.split(' ')[0]);
+            const incomeData = [];
+            const expenseData = [];
+
+            availableMonths.forEach(m => {
+                const mTx = transactions.filter(t => t.date && t.date.startsWith(m.key));
+                const inc = mTx.filter(t => t.type === 'income').reduce((acc, t) => acc + Number(t.amount), 0);
+                const exp = mTx.filter(t => t.type === 'expense').reduce((acc, t) => acc + Number(t.amount), 0);
+                incomeData.push(inc);
+                expenseData.push(exp);
+            });
+
+            const ctxBar = document.getElementById('monthly-comparison-chart').getContext('2d');
+            if (monthlyChartInstance) monthlyChartInstance.destroy();
+
+            monthlyChartInstance = new Chart(ctxBar, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        { label: 'Доходы', data: incomeData, backgroundColor: '#34C759', borderRadius: 6 },
+                        { label: 'Расходы', data: expenseData, backgroundColor: '#FF3B30', borderRadius: 6 }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { position: 'top', labels: { boxWidth: 12, font: { size: 10 } } } },
+                    scales: {
+                        x: { grid: { display: false } },
+                        y: { ticks: { font: { size: 9 } } }
+                    }
+                }
+            });
+        }
+
+        /* ==================== SETTINGS & CATEGORIES LOGIC ==================== */
+        function toggleCategoryManageType(type) {
+            currentManageCategoryType = type;
+            const expBtn = document.getElementById('cat-type-btn-expense');
+            const incBtn = document.getElementById('cat-type-btn-income');
+
+            if (type === 'expense') {
+                expBtn.className = 'flex-1 py-1.5 text-xs font-semibold rounded-lg bg-iosPrimary text-white';
+                incBtn.className = 'flex-1 py-1.5 text-xs font-semibold rounded-lg bg-iosBgLight dark:bg-iosBgDark text-iosGray';
+            } else {
+                incBtn.className = 'flex-1 py-1.5 text-xs font-semibold rounded-lg bg-iosPrimary text-white';
+                expBtn.className = 'flex-1 py-1.5 text-xs font-semibold rounded-lg bg-iosBgLight dark:bg-iosBgDark text-iosGray';
+            }
+            renderSettingsCategories();
+        }
+
+        function renderSettingsCategories() {
+            const listEl = document.getElementById('settings-categories-list');
+            const catList = categories[currentManageCategoryType] || [];
+
+            listEl.innerHTML = catList.map(cat => `
+                <div class="flex items-center justify-between bg-iosBgLight dark:bg-iosBgDark p-2.5 rounded-xl border border-iosBorderLight dark:border-iosBorderDark text-xs">
+                    <span class="font-medium">${cat}</span>
+                    <button onclick="removeCategory('${cat}')" class="text-iosRed p-1 active:scale-90">
+                        <i data-lucide="trash-2" class="w-4 h-4"></i>
+                    </button>
+                </div>
+            `).join('');
+
+            lucide.createIcons();
+        }
+
+        function addNewCategory() {
+            const input = document.getElementById('new-category-name');
+            const name = input.value.trim();
+            if (!name) return;
+
+            if (categories[currentManageCategoryType].includes(name)) {
+                showToast('Такая категория уже существует');
+                return;
+            }
+
+            categories[currentManageCategoryType].push(name);
+            saveData();
+            input.value = '';
+            renderSettingsCategories();
+            showToast('Категория добавлена');
+        }
+
+        function removeCategory(catName) {
+            categories[currentManageCategoryType] = categories[currentManageCategoryType].filter(c => c !== catName);
+            saveData();
+            renderSettingsCategories();
+            showToast('Категория удалена');
+        }
+
+        /* ==================== EXPORT & IMPORT ==================== */
+        function exportDataJSON() {
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify({
+                categories,
+                transactions
+            }, null, 2));
+            const downloadAnchor = document.createElement('a');
+            downloadAnchor.setAttribute("href", dataStr);
+            downloadAnchor.setAttribute("download", `finance_backup_${getFormattedDate(0)}.json`);
+            document.body.appendChild(downloadAnchor);
+            downloadAnchor.click();
+            downloadAnchor.remove();
+            showToast('Данные экспортированы в JSON');
+        }
+
+        function exportDataCSV() {
+            let csvContent = "data:text/csv;charset=utf-8,\uFEFF";
+            csvContent += "ID;Тип;Сумма;Категория;Дата;Комментарий\n";
+
+            transactions.forEach(t => {
+                const row = [
+                    t.id,
+                    t.type === 'income' ? 'Доход' : 'Расход',
+                    t.amount,
+                    `"${t.category || ''}"`,
+                    t.date,
+                    `"${(t.comment || '').replace(/"/g, '""')}"`
+                ].join(";");
+                csvContent += row + "\n";
+            });
+
+            const encodedUri = encodeURI(csvContent);
+            const link = document.createElement("a");
+            link.setAttribute("href", encodedUri);
+            link.setAttribute("download", `finance_export_${getFormattedDate(0)}.csv`);
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            showToast('Данные экспортированы в CSV');
+        }
+
+        function importDataJSON(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const parsed = JSON.parse(e.target.result);
+                    if (parsed.transactions && parsed.categories) {
+                        transactions = parsed.transactions;
+                        categories = parsed.categories;
+                        saveData();
+                        populateMonthDropdowns();
+                        renderDashboard();
+                        renderHistory();
+                        renderSettingsCategories();
+                        showToast('Данные успешно импортированы!');
+                    } else {
+                        showToast('Неверный формат файла');
+                    }
+                } catch (err) {
+                    showToast('Ошибка при чтении файла');
+                }
+            };
+            reader.readAsText(file);
+        }
+
+        function confirmResetData() {
+            if (confirm('Вы уверены, что хотите сбросить все данные к начальным демо-записям?')) {
+                localStorage.removeItem(STORAGE_KEY_TX);
+                localStorage.removeItem(STORAGE_KEY_CAT);
+                loadData();
+                populateMonthDropdowns();
+                renderDashboard();
+                renderHistory();
+                renderSettingsCategories();
+                showToast('Данные сброшены');
+            }
+        }
+
+        /* ==================== TRANSACTION MODAL & HANDLERS ==================== */
+        function openModal(modalId) {
+            document.getElementById(modalId).classList.remove('hidden');
+        }
+
+        function closeModal(modalId) {
+            document.getElementById(modalId).classList.add('hidden');
+        }
+
+        function openModalWithDetails(type = 'expense') {
+            document.getElementById('tx-id').value = '';
+            document.getElementById('modal-title').innerText = type === 'income' ? 'Новый Доход' : 'Новый Расход';
+            document.getElementById('tx-amount').value = '';
+            document.getElementById('tx-date').value = getFormattedDate(0);
+            document.getElementById('tx-comment').value = '';
+            document.getElementById('tx-delete-btn').classList.add('hidden');
+
+            setTxType(type);
+            openModal('transaction-modal');
+        }
+
+        function editTransaction(id) {
+            const tx = transactions.find(t => t.id === id);
+            if (!tx) return;
+
+            document.getElementById('tx-id').value = tx.id;
+            document.getElementById('modal-title').innerText = 'Редактировать запись';
+            document.getElementById('tx-amount').value = tx.amount;
+            document.getElementById('tx-date').value = tx.date;
+            document.getElementById('tx-comment').value = tx.comment || '';
+            document.getElementById('tx-delete-btn').classList.remove('hidden');
+
+            setTxType(tx.type);
+            document.getElementById('tx-category').value = tx.category;
+
+            openModal('transaction-modal');
+        }
+
+        function setTxType(type) {
+            currentModalTxType = type;
+            const expBtn = document.getElementById('tx-type-expense');
+            const incBtn = document.getElementById('tx-type-income');
+
+            if (type === 'expense') {
+                expBtn.className = 'py-2 text-xs font-semibold rounded-lg bg-iosRed text-white shadow-sm transition-all';
+                incBtn.className = 'py-2 text-xs font-semibold rounded-lg text-iosGray transition-all';
+            } else {
+                incBtn.className = 'py-2 text-xs font-semibold rounded-lg bg-iosGreen text-white shadow-sm transition-all';
+                expBtn.className = 'py-2 text-xs font-semibold rounded-lg text-iosGray transition-all';
+            }
+
+            // Populate category select dropdown
+            const catSelect = document.getElementById('tx-category');
+            const catList = categories[type] || [];
+            catSelect.innerHTML = catList.map(c => `<option value="${c}">${c}</option>`).join('');
+        }
+
+        function handleSaveTransaction(e) {
+            e.preventDefault();
+            const id = document.getElementById('tx-id').value;
+            const amount = parseFloat(document.getElementById('tx-amount').value);
+            const category = document.getElementById('tx-category').value;
+            const date = document.getElementById('tx-date').value;
+            const comment = document.getElementById('tx-comment').value.trim();
+
+            if (isNaN(amount) || amount <= 0) {
+                showToast('Введите корректную сумму');
+                return;
+            }
+
+            if (id) {
+                // Edit existing
+                const idx = transactions.findIndex(t => t.id === id);
+                if (idx !== -1) {
+                    transactions[idx] = { id, type: currentModalTxType, amount, category, date, comment };
+                }
+            } else {
+                // Add new
+                const newTx = {
+                    id: Date.now().toString(),
+                    type: currentModalTxType,
+                    amount,
+                    category,
+                    date,
+                    comment
+                };
+                transactions.push(newTx);
+            }
+
+            saveData();
+            closeModal('transaction-modal');
+            populateMonthDropdowns();
+            renderDashboard();
+            renderHistory();
+            showToast('Запись сохранена');
+        }
+
+        function handleDeleteTransaction() {
+            const id = document.getElementById('tx-id').value;
+            if (!id) return;
+
+            transactions = transactions.filter(t => t.id !== id);
+            saveData();
+            closeModal('transaction-modal');
+            populateMonthDropdowns();
+            renderDashboard();
+            renderHistory();
+            showToast('Запись удалена');
+        }
+
+        /* ==================== UI HELPER FUNCTIONS ==================== */
+        function createTransactionItemHtml(t) {
+            const isIncome = t.type === 'income';
+            const sign = isIncome ? '+' : '−';
+            const colorClass = isIncome ? 'text-iosGreen' : 'text-iosRed';
+            const iconName = isIncome ? 'arrow-down-left' : 'arrow-up-right';
+            const bgIcon = isIncome ? 'bg-green-500/10 text-iosGreen' : 'bg-red-500/10 text-iosRed';
+
+            return `
+                <div onclick="editTransaction('${t.id}')" class="bg-iosCardLight dark:bg-iosCardDark p-3 rounded-2xl border border-iosBorderLight dark:border-iosBorderDark flex items-center justify-between active:scale-98 transition-transform cursor-pointer">
+                    <div class="flex items-center gap-3">
+                        <div class="p-2.5 ${bgIcon} rounded-xl">
+                            <i data-lucide="${iconName}" class="w-4 h-4"></i>
+                        </div>
+                        <div>
+                            <div class="font-bold text-xs sm:text-sm">${t.category}</div>
+                            ${t.comment ? `<div class="text-[11px] text-iosGray line-clamp-1">${escapeHtml(t.comment)}</div>` : ''}
+                        </div>
+                    </div>
+                    <div class="text-right">
+                        <div class="font-bold text-xs sm:text-sm ${colorClass}">
+                            ${sign} ${formatMoney(t.amount)}
+                        </div>
+                        <div class="text-[10px] text-iosGray">${formatShortDate(t.date)}</div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function formatMoney(amount) {
+            return new Intl.NumberFormat('ru-RU', { style: 'currency', currency: 'RUB', maximumFractionDigits: 0 }).format(amount);
+        }
+
+        function formatDateHeading(dateStr) {
+            const [y, m, d] = dateStr.split('-');
+            const dateObj = new Date(y, m - 1, d);
+            const today = getFormattedDate(0);
+            const yesterday = getFormattedDate(-1);
+
+            if (dateStr === today) return 'Сегодня';
+            if (dateStr === yesterday) return 'Вчера';
+
+            return dateObj.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', weekday: 'short' });
+        }
+
+        function formatShortDate(dateStr) {
+            const [y, m, d] = dateStr.split('-');
+            return `${d}.${m}`;
+        }
+
+        function escapeHtml(str) {
+            return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+        }
+
+        function showToast(message) {
+            const toast = document.getElementById('toast');
+            toast.innerText = message;
+            toast.classList.remove('opacity-0', 'pointer-events-none');
+            setTimeout(() => {
+                toast.classList.add('opacity-0', 'pointer-events-none');
+            }, 2000);
+        }
+
+        /* Inline Service Worker via Blob for 100% Offline operation */
+        function setupServiceWorker() {
+            if ('serviceWorker' in navigator) {
+                const swCode = `
+                    self.addEventListener('install', e => e.waitUntil(self.skipWaiting()));
+                    self.addEventListener('activate', e => e.waitUntil(self.clients.claim()));
+                    self.addEventListener('fetch', e => {
+                        e.respondWith(fetch(e.request).catch(() => caches.match(e.request)));
+                    });
+                `;
+                const blob = new Blob([swCode], { type: 'application/javascript' });
+                const blobUrl = URL.createObjectURL(blob);
+                navigator.serviceWorker.register(blobUrl).catch(() => {});
+            }
+        }
+    </script>
+</body>
+</html>
